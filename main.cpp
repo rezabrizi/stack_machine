@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 #include <stdexcept>
+#include <stack>
 
 #include "frame.h"
 using namespace std;
@@ -27,11 +28,16 @@ enum class Instruction: stackInstruction {
   Iseq = 0x8000000F,
   Isgt = 0x80000010,
   Isge = 0x80000011,
+  Call = 0x80000012,
+  Ret = 0x80000013,
 };
 
 class CPU {
 public:
-  CPU(vector<stackInstruction> instructions): program(instructions) {}
+  CPU(vector<stackInstruction> instructions): program(instructions) {
+    Frame iFrame(0); 
+    frames.push(iFrame); 
+  }
 
   void step() {
     stackInstruction nextInstruction = getNextWordFromProgram();
@@ -45,6 +51,10 @@ public:
   }
 
 private:
+  Frame getCurrentFrame(){
+    return frames.top();
+  }
+
   stackInstruction getNextWordFromProgram() {
     if (instruction_address >= program.size()) {
       throw runtime_error("stack underflow");
@@ -105,6 +115,21 @@ private:
       stk.push_front(getNextWordFromProgram());
       break;
     }
+    case Instruction::Call: {
+      stackInstruction address = getNextWordFromProgram();
+      // checkJumpAddress
+      frames.push(Frame(instruction_address));
+      instruction_address = address;
+      break; 
+    }
+
+    case Instruction::Ret: {
+      // checkThereIsAReturnAddress()
+      uint32_t returnAddress = getCurrentFrame().getReturnAddress();
+      frames.pop();
+      instruction_address = returnAddress;
+      break;
+    }
     case Instruction::Halt: {
       halted = true;
       break;
@@ -129,13 +154,13 @@ private:
 
     case Instruction::Load:{
       stackInstruction varNumber = getNextWordFromProgram();
-      stk.push_front(frame.getVariable(varNumber));
+      stk.push_front(getCurrentFrame().getVariable(varNumber));
       break;
     }
     case Instruction::Store:{
       int varNumber = getNextWordFromProgram();
       checkStackHasAtLeastOneItem("Store");
-      frame.setVariable(varNumber, stk.front());
+      getCurrentFrame().setVariable(varNumber, stk.front());
       stk.pop_front();
       break;
     }
@@ -201,11 +226,11 @@ private:
       throw runtime_error("wrong instruction");
     }
   }
+  stack<Frame> frames; 
   vector<stackInstruction> program;
   deque<stackInstruction> stk;
   bool halted = false;
   size_t instruction_address = 0;
-  Frame frame;
 };
 
 
